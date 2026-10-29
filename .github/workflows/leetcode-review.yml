@@ -1,0 +1,40 @@
+name: Open LeetCode review PR
+
+on:
+  push:
+    branches:
+      - submissions
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open PR when submissions is ahead of main
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const base = 'main';
+            const head = 'submissions';
+            const comparison = await github.rest.repos.compareCommits({ owner, repo, base, head });
+            if (comparison.data.ahead_by === 0) {
+              core.info('No new commits to review.');
+              return;
+            }
+            const existing = await github.rest.pulls.list({ owner, repo, state: 'open', base, head: `${owner}:${head}` });
+            if (existing.data.length > 0) {
+              core.info(`Existing review PR: ${existing.data[0].html_url}`);
+              return;
+            }
+            const pr = await github.rest.pulls.create({
+              owner, repo, base, head,
+              title: 'Review LeetCode solutions',
+              body: 'Automatic PR for new LeetCode submissions. Please review the changed Java solutions before merging into main.',
+            });
+            core.info(`Created: ${pr.data.html_url}`);
